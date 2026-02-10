@@ -21,6 +21,9 @@ A tool that visualizes the storage resource hierarchy for OpenShift Virtualizati
 - Displays storage class, size, and reclaim policy
 - Warns about dangerous reclaim policies
 - Can show all VMs using a specific storage class
+- **Detects orphaned storage resources** (DataVolumes, PVCs, PVs not owned by any VM)
+- Works with both `oc` (OpenShift) and `kubectl` (vanilla Kubernetes)
+- Colored output for better readability
 
 **Usage:**
 
@@ -29,10 +32,16 @@ A tool that visualizes the storage resource hierarchy for OpenShift Virtualizati
 ./vm-tree.py fedora-vm-with-storage --namespace default
 
 # Show all VMs using a storage class (useful for migration planning)
-./vm-tree.py --storage-class gp3-csi
+./vm-tree.py --storage-class standard
+
+# Find orphaned storage resources in default namespace
+./vm-tree.py --find-orphans
+
+# Find orphaned resources across all namespaces
+./vm-tree.py --find-orphans --all-namespaces
 ```
 
-**Example Output:**
+**Example Output - VM Storage Tree:**
 
 ```
 ================================================================================
@@ -40,28 +49,52 @@ A tool that visualizes the storage resource hierarchy for OpenShift Virtualizati
 ================================================================================
 
 VirtualMachine: fedora-vm-with-storage
-├─ UID: 9d5f86aa-90f3-4646-a0f2-835826a30a10
+├─ UID: 86aa276e-2765-4902-bf0f-774f44eeb067
 ├─ Status: Stopped
 │
 ├─ DataVolumes: (1 found)
 │  └─ DataVolume: fedora-dv-inline
-      ├─ Phase: Bound
-      ├─ Size: 10Gi
-      ├─ StorageClass: gp3-csi
+      ├─ Phase: WaitForFirstConsumer
+      ├─ Size: 5Gi
+      ├─ StorageClass: standard
       │
       └─ PersistentVolumeClaim: fedora-dv-inline
-         ├─ Status: Bound
-         │
-         └─ PersistentVolume: pvc-0843c555-450f-448d-be70-9b8c02a082c6
-            ├─ Size: 10Gi
-            └─ ReclaimPolicy: Delete ⚠️  (Data will be deleted with PVC!)
+         ├─ Status: Pending
+         └─ PersistentVolume: (not yet bound)
 
 ================================================================================
 ```
 
+**Example Output - Orphaned Resources:**
+
+```
+================================================================================
+  Orphaned Storage Resources
+  Namespace: default
+================================================================================
+
+Found 1 orphaned resource(s):
+
+❌ Orphaned DataVolumes: 1
+(Not owned by any VirtualMachine)
+
+  • DataVolume: fedora-dv
+    ├─ Namespace: default
+    ├─ Size: 5Gi
+    ├─ StorageClass: standard
+    ├─ Phase: WaitForFirstConsumer
+    └─ Created: 2026-02-10T18:48:10Z
+
+================================================================================
+⚠️  These resources are consuming storage but not used by any VM
+⚠️  Consider cleaning up to reclaim storage
+================================================================================
+```
+
+This directly addresses the scale issue (eg when cluster has 40,000 VMs), where orphaned resources become impossible to track manually. With this tool, wasted storage can be identified across the entire cluster.
+
 ### Roadmap
 1. Enhance `vm-tree.py` with:
-   - Orphaned resource detection
    - Storage migration planning mode
    - Bulk operations support
    - Label-based tracking improvements
