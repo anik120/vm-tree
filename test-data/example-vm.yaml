@@ -1,0 +1,43 @@
+apiVersion: kubevirt.io/v1
+kind: VirtualMachine
+metadata:
+  name: example-fedora-vm
+  namespace: default
+  labels:
+    app: example-vm
+spec:
+  running: false  # We won't actually start it (no nested virt support)
+  template:
+    metadata:
+      labels:
+        kubevirt.io/vm: example-fedora-vm
+    spec:
+      domain:
+        devices:
+          disks:
+          - name: containerdisk
+            disk:
+              bus: virtio
+          - name: cloudinitdisk
+            disk:
+              bus: virtio
+          interfaces:
+          - name: default
+            masquerade: {}
+        resources:
+          requests:
+            memory: 1Gi
+      networks:
+      - name: default
+        pod: {}
+      volumes:
+      - name: containerdisk
+        containerDisk:
+          image: quay.io/containerdisks/fedora:40
+      - name: cloudinitdisk
+        cloudInitNoCloud:
+          userData: |
+            #cloud-config
+            user: fedora
+            password: fedora
+            chpasswd: { expire: False }

@@ -1,0 +1,71 @@
+---
+# DataVolume - The orchestration layer for storage
+apiVersion: cdi.kubevirt.io/v1beta1
+kind: DataVolume
+metadata:
+  name: fedora-dv
+  namespace: default
+spec:
+  source:
+    registry:
+      url: "docker://quay.io/containerdisks/fedora:40"
+  storage:
+    storageClassName: gp3-csi
+    accessModes:
+      - ReadWriteOnce
+    resources:
+      requests:
+        storage: 10Gi
+---
+# VirtualMachine that uses the DataVolume
+apiVersion: kubevirt.io/v1
+kind: VirtualMachine
+metadata:
+  name: fedora-vm-with-storage
+  namespace: default
+  labels:
+    app: storage-example
+spec:
+  running: false  # Won't start due to nested virt limitations
+  dataVolumeTemplates:
+  - metadata:
+      name: fedora-dv-inline
+    spec:
+      source:
+        registry:
+          url: "docker://quay.io/containerdisks/fedora:40"
+      storage:
+        storageClassName: gp3-csi
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 10Gi
+  template:
+    metadata:
+      labels:
+        kubevirt.io/vm: fedora-vm-with-storage
+    spec:
+      domain:
+        devices:
+          disks:
+          - name: datavolumedisk
+            disk:
+              bus: virtio
+          - name: cloudinitdisk
+            disk:
+              bus: virtio
+        resources:
+          requests:
+            memory: 2Gi
+      volumes:
+      - name: datavolumedisk
+        dataVolume:
+          name: fedora-dv-inline
+      - name: cloudinitdisk
+        cloudInitNoCloud:
+          userData: |
+            #cloud-config
+            user: fedora
+            password: fedora
+            chpasswd: { expire: False }
