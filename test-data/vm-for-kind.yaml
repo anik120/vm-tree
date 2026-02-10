@@ -1,0 +1,79 @@
+---
+# DataVolume - The orchestration layer for storage
+apiVersion: cdi.kubevirt.io/v1beta1
+kind: DataVolume
+metadata:
+  name: fedora-dv
+  namespace: default
+  labels:
+    storage-class: standard
+    migration-test: original
+spec:
+  source:
+    registry:
+      url: "docker://quay.io/containerdisks/fedora:40"
+  storage:
+    storageClassName: standard  # Changed to kind's storage class
+    accessModes:
+      - ReadWriteOnce
+    resources:
+      requests:
+        storage: 5Gi  # Reduced size for kind
+---
+# VirtualMachine that uses the DataVolume
+apiVersion: kubevirt.io/v1
+kind: VirtualMachine
+metadata:
+  name: fedora-vm-with-storage
+  namespace: default
+  labels:
+    app: storage-example
+    migration-test: original
+spec:
+  running: false
+  dataVolumeTemplates:
+  - metadata:
+      name: fedora-dv-inline
+      labels:
+        storage-class: standard
+        migration-test: original
+    spec:
+      source:
+        registry:
+          url: "docker://quay.io/containerdisks/fedora:40"
+      storage:
+        storageClassName: standard  # Changed to kind's storage class
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 5Gi  # Reduced size for kind
+  template:
+    metadata:
+      labels:
+        kubevirt.io/vm: fedora-vm-with-storage
+    spec:
+      domain:
+        devices:
+          disks:
+          - name: datavolumedisk
+            disk:
+              bus: virtio
+          - name: cloudinitdisk
+            disk:
+              bus: virtio
+        resources:
+          requests:
+            memory: 1Gi  # Reduced for kind
+            cpu: "1"
+      volumes:
+      - name: datavolumedisk
+        dataVolume:
+          name: fedora-dv-inline
+      - name: cloudinitdisk
+        cloudInitNoCloud:
+          userData: |
+            #cloud-config
+            user: fedora
+            password: fedora
+            chpasswd: { expire: False }
