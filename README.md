@@ -335,6 +335,94 @@ After migration, use `./vm-tree.py --find-orphans` to identify old resources for
 
 ---
 
+### `migration-watch.py` - Real-Time Migration Progress Monitor
+
+A tool that monitors storage migration progress in real-time, providing live status updates and error reporting.
+
+**Features:**
+- **Real-time updates**: Auto-refreshes every 5 seconds (configurable)
+- **Progress bars**: Visual representation of clone progress for each DataVolume
+- **Statistics dashboard**: Shows total, completed, in-progress, pending, and failed migrations
+- **Color-coded status**: Green=completed, Cyan=in-progress, Yellow=pending, Red=failed
+- **Error reporting**: Displays failure reasons and messages
+- **Age tracking**: Shows how long each migration has been running
+- **Namespace filtering**: Monitor specific namespace or all namespaces
+- **Storage class filtering**: Track migrations to a specific target storage class
+
+**Usage:**
+
+```bash
+# Watch migrations in default namespace
+./migration-watch.py -n default
+
+# Watch migrations to specific storage class
+./migration-watch.py -n default --to-sc standard-fast
+
+# Watch across all namespaces
+./migration-watch.py --all-namespaces
+
+# Custom refresh interval (10 seconds instead of 5)
+./migration-watch.py -n default --refresh 10
+```
+
+**Example Output:**
+
+```
+================================================================================
+  STORAGE MIGRATION PROGRESS
+  Namespace: default
+  Updated: 2026-02-11 10:23:45
+================================================================================
+
+  Summary:
+    Total DataVolumes:    10
+    ✅ Completed:         3 (30.0%)
+    ⏳ In Progress:       5
+    ⏸  Pending:          2
+    ❌ Failed:           0
+
+  Overall Progress: [============                            ] 30.0%
+
+================================================================================
+
+NAMESPACE    NAME                              PHASE              PROGRESS              AGE
+--------------------------------------------------------------------------------------------
+default      test-vm-001-disk-migrated-...     Succeeded          [===============] 100%  5m
+default      test-vm-002-disk-migrated-...     Succeeded          [===============] 100%  5m
+default      test-vm-003-disk-migrated-...     Succeeded          [===============] 100%  4m
+default      test-vm-004-disk-migrated-...     CloneInProgress    [=======        ] 45%   4m
+default      test-vm-005-disk-migrated-...     CloneInProgress    [====           ] 25%   3m
+default      test-vm-006-disk-migrated-...     CloneInProgress    [===            ] 20%   3m
+default      test-vm-007-disk-migrated-...     CloneInProgress    [==             ] 15%   2m
+default      test-vm-008-disk-migrated-...     CloneInProgress    [=              ] 10%   2m
+default      test-vm-009-disk-migrated-...     Pending            ··············· N/A    1m
+default      test-vm-010-disk-migrated-...     Pending            ··············· N/A    1m
+
+Refreshing in 5s... (Press Ctrl+C to stop)
+```
+
+**Workflow:**
+
+Open a second terminal while migration is running:
+
+```bash
+# Terminal 1: Execute migration
+./storage-migration.py execute --from-sc standard --to-sc standard-fast -n default
+
+# Terminal 2: Monitor progress
+./migration-watch.py -n default --to-sc standard-fast
+```
+
+**Key Benefits:**
+- **Visibility**: See exactly what's happening during large-scale migrations
+- **Early detection**: Catch failures as they happen, not after the fact
+- **Progress estimation**: Understand how long migration will take
+- **Passive monitoring**: No need to manually run `kubectl get dv` repeatedly
+
+This tool is essential for large scale migration where manual monitoring is impossible. Set it and monitor passively while migrations run in parallel.
+
+---
+
 ### Roadmap 
 
 1. Enhance `storage-migration.py`:
