@@ -226,31 +226,153 @@ def print_vm_tree(vm_name: str, namespace: str):
     print("=" * 80)
 
 
+def get_active_dvs_for_vm(vm: Dict) -> List[str]:
+    """
+    Get list of DataVolume names that are actively referenced in VM spec.
+    These are the DVs the VM is actually using.
+    """
+    active_dvs = []
+
+    # Check dataVolumeTemplates
+    dv_templates = vm.get('spec', {}).get('dataVolumeTemplates', [])
+    for template in dv_templates:
+        dv_name = template.get('metadata', {}).get('name')
+        if dv_name:
+            active_dvs.append(dv_name)
+
+    # Check volumes in template spec
+    volumes = vm.get('spec', {}).get('template', {}).get('spec', {}).get('volumes', [])
+    for volume in volumes:
+        dv_ref = volume.get('dataVolume', {}).get('name')
+        if dv_ref and dv_ref not in active_dvs:
+            active_dvs.append(dv_ref)
+
+    return active_dvs
+
+
 def find_orphaned_resources(namespace: Optional[str] = None) -> Dict[str, List[Dict]]:
-    """Find orphaned storage resources (not owned by any VM)"""
+    """
+    Find orphaned storage resources.
+
+    An orphaned DataVolume is one that:
+    1. Has no ownerReferences at all, OR
+    2. Has ownerReference to a VM but is not actively referenced in the VM spec
+       (leftover from migration or manual operations)
+    """
     orphaned = {
         'datavolumes': [],
         'pvcs': [],
         'pvs': []
     }
 
-    # Find orphaned DataVolumes (no ownerReferences or not owned by VM)
+    # Get all VMs and build active DV mapping
+    all_vms = get_all_vms(namespace)
+    vm_to_active_dvs = {}  # vm_uid -> list of active DV names
+    active_dv_set = set()  # (namespace, dv_name)
+
+    for vm in all_vms:
+        vm_uid = vm['metadata']['uid']
+        vm_namespace = vm['metadata']['namespace']
+        active_dvs = get_active_dvs_for_vm(vm)
+        vm_to_active_dvs[vm_uid] = active_dvs
+
+        for dv_name in active_dvs:
+            active_dv_set.add((vm_namespace, dv_name))
+
+    # Find orphaned DataVolumes
     all_dvs = get_all_datavolumes(namespace)
     for dv in all_dvs:
+        dv_name = dv['metadata']['name']
+        dv_namespace = dv['metadata']['namespace']
         owner_refs = dv.get('metadata', {}).get('ownerReferences', [])
 
         # Check if owned by a VM
-        has_vm_owner = any(ref.get('kind') == 'VirtualMachine' for ref in owner_refs)
+        vm_owner = None
+        for ref in owner_refs:
+            if ref.get('kind') == 'VirtualMachine':
+                vm_owner = ref
+                break
 
-        if not has_vm_owner:
-            orphaned['datavolumes'].append({
-                'name': dv['metadata']['name'],
-                'namespace': dv['metadata']['namespace'],
+        is_orphaned = False
+        correlation = None
+
+        if vm_owner:
+            # Has VM owner - check if actively used
+            if (dv_namespace, dv_name) not in active_dv_set:
+                # Orphaned: has ownerRef but VM doesn't use it anymore
+                is_orphaned = True
+
+                # Build correlation programmatically using ownerReference
+                vm_name = vm_owner.get('name')
+                vm_uid = vm_owner.get('uid')
+
+                # Find the VM object
+                vm_obj = None
+                for vm in all_vms:
+                    if vm['metadata']['uid'] == vm_uid:
+                        vm_obj = vm
+                        break
+
+                if vm_obj:
+                    vm_status = vm_obj.get('status', {}).get('printableStatus', 'Unknown')
+                    current_dvs = vm_to_active_dvs.get(vm_uid, [])
+
+                    # Check if this orphaned DV is the source for any active DV
+                    is_source_for = []
+                    for active_dv_name in current_dvs:
+                        # Get the active DV
+                        active_dv = None
+                        for dv_candidate in all_dvs:
+                            if (dv_candidate['metadata']['name'] == active_dv_name and
+                                dv_candidate['metadata']['namespace'] == dv_namespace):
+                                active_dv = dv_candidate
+                                break
+
+                        if active_dv:
+                            # Check if orphaned DV is the source
+                            source_pvc = active_dv.get('spec', {}).get('source', {}).get('pvc', {})
+                            if source_pvc.get('name') == dv_name:
+                                is_source_for.append(active_dv_name)
+
+                    # Build correlation
+                    correlation = {
+                        'vm_name': vm_name,
+                        'vm_namespace': dv_namespace,
+                        'vm_status': vm_status,
+                        'current_vm_dvs': current_dvs,
+                        'is_migration': len(is_source_for) > 0,
+                        'replaced_by': is_source_for
+                    }
+
+                    if is_source_for:
+                        # Very high confidence - this DV was used as source for migration
+                        correlation['confidence'] = 'very-high'
+                        correlation['reason'] = f"Migration source for: {', '.join(is_source_for)}"
+                    else:
+                        # High confidence - has ownerRef but not used
+                        correlation['confidence'] = 'high'
+                        correlation['reason'] = f"Has ownerReference to VM but not in VM spec"
+
+        elif not owner_refs:
+            # No owner at all - orphaned
+            is_orphaned = True
+
+        if is_orphaned:
+            dv_info = {
+                'name': dv_name,
+                'namespace': dv_namespace,
                 'size': dv.get('spec', {}).get('storage', {}).get('resources', {}).get('requests', {}).get('storage', 'N/A'),
                 'storageClass': dv.get('spec', {}).get('storage', {}).get('storageClassName', 'N/A'),
                 'phase': dv.get('status', {}).get('phase', 'Unknown'),
-                'created': dv['metadata'].get('creationTimestamp', 'Unknown')
-            })
+                'created': dv['metadata'].get('creationTimestamp', 'Unknown'),
+                'labels': dv.get('metadata', {}).get('labels', {}),
+                'annotations': dv.get('metadata', {}).get('annotations', {})
+            }
+
+            if correlation:
+                dv_info['correlation'] = correlation
+
+            orphaned['datavolumes'].append(dv_info)
 
     # Find orphaned PVCs (no ownerReferences or not owned by DataVolume)
     all_pvcs = get_all_pvcs(namespace)
@@ -326,6 +448,59 @@ def print_orphaned_resources(namespace: Optional[str] = None):
             print(f"    ├─ Size: {dv['size']}")
             print(f"    ├─ StorageClass: {dv['storageClass']}")
             print(f"    ├─ Phase: {dv['phase']}")
+
+            # Show migration info if present
+            is_migration = dv['labels'].get('storage-migration') == 'true'
+            if is_migration:
+                source_sc = dv['labels'].get('source-sc', 'N/A')
+                target_sc = dv['labels'].get('target-sc', 'N/A')
+                migration_ts = dv['annotations'].get('migration-timestamp', 'N/A')
+                print(f"    ├─ {Colors.WARNING}Migration DV:{Colors.ENDC} {source_sc} → {target_sc}")
+                print(f"    │  └─ Migrated at: {migration_ts}")
+
+            # Show correlation if found
+            if 'correlation' in dv:
+                corr = dv['correlation']
+                confidence = corr['confidence']
+
+                # Color code by confidence
+                if confidence == 'very-high':
+                    conf_color = Colors.OKGREEN
+                    conf_symbol = "✓✓"
+                elif confidence == 'high':
+                    conf_color = Colors.OKGREEN
+                    conf_symbol = "✓"
+                elif confidence == 'medium':
+                    conf_color = Colors.WARNING
+                    conf_symbol = "~"
+                else:
+                    conf_color = Colors.WARNING
+                    conf_symbol = "?"
+
+                print(f"    ├─ {conf_color}Belongs to VM:{Colors.ENDC} {corr['vm_name']} ({conf_symbol} {confidence} confidence)")
+                print(f"    │  ├─ Reason: {corr['reason']}")
+                print(f"    │  ├─ VM Status: {corr['vm_status']}")
+
+                if corr.get('replaced_by'):
+                    print(f"    │  ├─ {Colors.OKCYAN}Replaced by:{Colors.ENDC} {', '.join(corr['replaced_by'])}")
+
+                if corr['current_vm_dvs']:
+                    print(f"    │  └─ VM's current DVs: {', '.join(corr['current_vm_dvs'])}")
+
+                # Provide use case hint
+                if confidence == 'very-high' and corr.get('is_migration'):
+                    print(f"    │")
+                    print(f"    │  {Colors.WARNING}💡 Hint:{Colors.ENDC} This is an old disk from a storage migration.")
+                    print(f"    │      • The VM is now using the migrated disk(s)")
+                    print(f"    │      • If VM is working correctly, this can be safely deleted")
+                    print(f"    │      • If kept as backup, consider adding a 'backup' label for tracking")
+                elif confidence == 'high':
+                    print(f"    │")
+                    print(f"    │  {Colors.WARNING}💡 Hint:{Colors.ENDC} This disk has ownerReference but VM doesn't use it.")
+                    print(f"    │      • Verify the VM is working with its current disks")
+                    print(f"    │      • This is likely leftover from a manual operation or migration")
+                    print(f"    │      • Safe to delete if VM is functioning properly")
+
             print(f"    └─ Created: {dv['created']}")
             print()
 
@@ -360,8 +535,33 @@ def print_orphaned_resources(namespace: Optional[str] = None):
             print()
 
     print("=" * 80)
-    print(f"{Colors.WARNING}⚠️  These resources are consuming storage but not used by any VM{Colors.ENDC}")
-    print(f"{Colors.WARNING}⚠️  Consider cleaning up to reclaim storage{Colors.ENDC}")
+    print(f"{Colors.BOLD}Cleanup Recommendations:{Colors.ENDC}\n")
+
+    # Count correlated orphans
+    correlated_dvs = [dv for dv in orphaned['datavolumes'] if 'correlation' in dv]
+    uncorrelated_dvs = [dv for dv in orphaned['datavolumes'] if 'correlation' not in dv]
+
+    if correlated_dvs:
+        migration_dvs = [dv for dv in correlated_dvs if dv['correlation'].get('is_migration')]
+        other_correlated = [dv for dv in correlated_dvs if not dv['correlation'].get('is_migration')]
+
+        if migration_dvs:
+            print(f"{Colors.OKGREEN}✓ {len(migration_dvs)} orphaned DV(s) from storage migrations{Colors.ENDC}")
+            print(f"  → These were replaced by new DataVolumes on different storage classes")
+            print(f"  → Verify VMs are working with new disks, then delete old ones\n")
+
+        if other_correlated:
+            print(f"{Colors.WARNING}⚠ {len(other_correlated)} orphaned DV(s) with ownerReferences but not in VM specs{Colors.ENDC}")
+            print(f"  → Likely leftover from manual VM spec changes")
+            print(f"  → Verify VMs are working, then clean up\n")
+
+    if uncorrelated_dvs:
+        print(f"{Colors.WARNING}⚠ {len(uncorrelated_dvs)} orphaned DV(s) with no VM owner{Colors.ENDC}")
+        print(f"  → May be from deleted VMs, manual creations, or failed operations")
+        print(f"  → Review carefully before deletion\n")
+
+    print(f"{Colors.WARNING}⚠️  All orphaned resources are consuming storage but not actively used{Colors.ENDC}")
+    print(f"{Colors.WARNING}⚠️  Consider cleaning up to reclaim storage space{Colors.ENDC}")
     print("=" * 80)
 
 
