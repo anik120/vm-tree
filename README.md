@@ -19,6 +19,12 @@ Tools for managing VM storage relationships and automating storage class migrati
 
 # 5. Execute the migration (dry-run first!)
 ./storage-migration.py execute --from-sc standard --to-sc standard-fast -n default --dry-run
+
+# 6. Execute actual migration
+./storage-migration.py execute --from-sc standard --to-sc standard-fast -n default
+
+# 7. Monitor migration progress in real-time (in a second terminal)
+./migration-watch.py -n default --to-sc standard-fast
 ```
 
 ## Motivation
@@ -330,6 +336,88 @@ DRY RUN COMPLETE
 Run without --dry-run to execute actual migration
 ================================================================================
 ```
+**Example Output - Execute Migration:**
+
+```
+$ ./storage-migration.py execute --from-sc standard --to-sc standard-fast -n default
+================================================================================
+  EXECUTING STORAGE MIGRATION
+================================================================================
+
+Migrating 10 VM(s)...
+
+[1/10] Migrating VM: test-vm-001
+  Creating new DataVolume: test-vm-001-disk-migrated-1770826216
+  ✅ DataVolume created
+  Updating VM spec to use new DataVolumes...
+  ✅ VM patched: test-vm-001-disk → test-vm-001-disk-migrated-1770826216
+
+[2/10] Migrating VM: test-vm-002
+  Creating new DataVolume: test-vm-002-disk-migrated-1770826217
+  ✅ DataVolume created
+  Updating VM spec to use new DataVolumes...
+  ✅ VM patched: test-vm-002-disk → test-vm-002-disk-migrated-1770826217
+
+[3/10] Migrating VM: test-vm-003
+  Creating new DataVolume: test-vm-003-disk-migrated-1770826218
+  ✅ DataVolume created
+  Updating VM spec to use new DataVolumes...
+  ✅ VM patched: test-vm-003-disk → test-vm-003-disk-migrated-1770826218
+
+[4/10] Migrating VM: test-vm-004
+  Creating new DataVolume: test-vm-004-disk-migrated-1770826218
+  ✅ DataVolume created
+  Updating VM spec to use new DataVolumes...
+  ✅ VM patched: test-vm-004-disk → test-vm-004-disk-migrated-1770826218
+
+[5/10] Migrating VM: test-vm-005
+  Creating new DataVolume: test-vm-005-disk-migrated-1770826219
+  ✅ DataVolume created
+  Updating VM spec to use new DataVolumes...
+  ✅ VM patched: test-vm-005-disk → test-vm-005-disk-migrated-1770826219
+
+[6/10] Migrating VM: test-vm-006
+  Creating new DataVolume: test-vm-006-disk-migrated-1770826220
+  ✅ DataVolume created
+  Updating VM spec to use new DataVolumes...
+  ✅ VM patched: test-vm-006-disk → test-vm-006-disk-migrated-1770826220
+
+[7/10] Migrating VM: test-vm-007
+  Creating new DataVolume: test-vm-007-disk-migrated-1770826221
+  ✅ DataVolume created
+  Updating VM spec to use new DataVolumes...
+  ✅ VM patched: test-vm-007-disk → test-vm-007-disk-migrated-1770826221
+
+[8/10] Migrating VM: test-vm-008
+  Creating new DataVolume: test-vm-008-disk-migrated-1770826222
+  ✅ DataVolume created
+  Updating VM spec to use new DataVolumes...
+  ✅ VM patched: test-vm-008-disk → test-vm-008-disk-migrated-1770826222
+
+[9/10] Migrating VM: test-vm-009
+  Creating new DataVolume: test-vm-009-disk-migrated-1770826223
+  ✅ DataVolume created
+  Updating VM spec to use new DataVolumes...
+  ✅ VM patched: test-vm-009-disk → test-vm-009-disk-migrated-1770826223
+
+[10/10] Migrating VM: test-vm-010
+  Creating new DataVolume: test-vm-010-disk-migrated-1770826224
+  ✅ DataVolume created
+  Updating VM spec to use new DataVolumes...
+  ✅ VM patched: test-vm-010-disk → test-vm-010-disk-migrated-1770826224
+
+================================================================================
+MIGRATION INITIATED
+
+Monitor progress with:
+  kubectl get dv -n default -w
+
+After migration completes:
+  1. Verify VMs start successfully
+  2. Find orphaned resources: ./vm-tree.py --find-orphans
+  3. Clean up old DataVolumes
+================================================================================
+```
 
 After migration, use `./vm-tree.py --find-orphans` to identify old resources for cleanup.
 
@@ -428,7 +516,6 @@ This tool is essential for large scale migration where manual monitoring is impo
 1. Enhance `storage-migration.py`:
    - **Parallel execution**: Migrate N VMs concurrently (configurable)
    - **Rollback capability**: Revert if migration fails
-   - Progress tracking and status reporting
 
 3. Web UI:
    - Interactive relationship graphs
