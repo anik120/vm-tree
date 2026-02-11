@@ -1,0 +1,411 @@
+---
+# Test data: 10 VMs with DataVolumes on 'standard' storage class
+# This simulates a mass migration scenario (1/4000th of Dave's problem!)
+#
+# Usage:
+#   kubectl apply -f test-data/10-vms-for-migration.yaml
+#
+#   Then migrate:
+#   ./storage-migration.py plan --from-sc standard --to-sc standard-fast -n default
+#   ./storage-migration.py execute --from-sc standard --to-sc standard-fast -n default --dry-run
+#
+---
+apiVersion: kubevirt.io/v1
+kind: VirtualMachine
+metadata:
+  name: test-vm-001
+  namespace: default
+  labels:
+    app: migration-test
+    tier: web
+spec:
+  running: false
+  dataVolumeTemplates:
+  - metadata:
+      name: test-vm-001-disk
+    spec:
+      source:
+        registry:
+          url: "docker://quay.io/containerdisks/fedora:40"
+      storage:
+        storageClassName: standard
+        accessModes: [ReadWriteOnce]
+        resources:
+          requests:
+            storage: 3Gi
+  template:
+    spec:
+      domain:
+        devices:
+          disks:
+          - name: datavolumedisk
+            disk:
+              bus: virtio
+        resources:
+          requests:
+            memory: 512Mi
+            cpu: "1"
+      volumes:
+      - name: datavolumedisk
+        dataVolume:
+          name: test-vm-001-disk
+---
+apiVersion: kubevirt.io/v1
+kind: VirtualMachine
+metadata:
+  name: test-vm-002
+  namespace: default
+  labels:
+    app: migration-test
+    tier: web
+spec:
+  running: false
+  dataVolumeTemplates:
+  - metadata:
+      name: test-vm-002-disk
+    spec:
+      source:
+        registry:
+          url: "docker://quay.io/containerdisks/fedora:40"
+      storage:
+        storageClassName: standard
+        accessModes: [ReadWriteOnce]
+        resources:
+          requests:
+            storage: 3Gi
+  template:
+    spec:
+      domain:
+        devices:
+          disks:
+          - name: datavolumedisk
+            disk:
+              bus: virtio
+        resources:
+          requests:
+            memory: 512Mi
+            cpu: "1"
+      volumes:
+      - name: datavolumedisk
+        dataVolume:
+          name: test-vm-002-disk
+---
+apiVersion: kubevirt.io/v1
+kind: VirtualMachine
+metadata:
+  name: test-vm-003
+  namespace: default
+  labels:
+    app: migration-test
+    tier: app
+spec:
+  running: false
+  dataVolumeTemplates:
+  - metadata:
+      name: test-vm-003-disk
+    spec:
+      source:
+        registry:
+          url: "docker://quay.io/containerdisks/fedora:40"
+      storage:
+        storageClassName: standard
+        accessModes: [ReadWriteOnce]
+        resources:
+          requests:
+            storage: 4Gi
+  template:
+    spec:
+      domain:
+        devices:
+          disks:
+          - name: datavolumedisk
+            disk:
+              bus: virtio
+        resources:
+          requests:
+            memory: 1Gi
+            cpu: "1"
+      volumes:
+      - name: datavolumedisk
+        dataVolume:
+          name: test-vm-003-disk
+---
+apiVersion: kubevirt.io/v1
+kind: VirtualMachine
+metadata:
+  name: test-vm-004
+  namespace: default
+  labels:
+    app: migration-test
+    tier: app
+spec:
+  running: false
+  dataVolumeTemplates:
+  - metadata:
+      name: test-vm-004-disk
+    spec:
+      source:
+        registry:
+          url: "docker://quay.io/containerdisks/fedora:40"
+      storage:
+        storageClassName: standard
+        accessModes: [ReadWriteOnce]
+        resources:
+          requests:
+            storage: 4Gi
+  template:
+    spec:
+      domain:
+        devices:
+          disks:
+          - name: datavolumedisk
+            disk:
+              bus: virtio
+        resources:
+          requests:
+            memory: 1Gi
+            cpu: "1"
+      volumes:
+      - name: datavolumedisk
+        dataVolume:
+          name: test-vm-004-disk
+---
+apiVersion: kubevirt.io/v1
+kind: VirtualMachine
+metadata:
+  name: test-vm-005
+  namespace: default
+  labels:
+    app: migration-test
+    tier: database
+spec:
+  running: false
+  dataVolumeTemplates:
+  - metadata:
+      name: test-vm-005-disk
+    spec:
+      source:
+        registry:
+          url: "docker://quay.io/containerdisks/fedora:40"
+      storage:
+        storageClassName: standard
+        accessModes: [ReadWriteOnce]
+        resources:
+          requests:
+            storage: 8Gi
+  template:
+    spec:
+      domain:
+        devices:
+          disks:
+          - name: datavolumedisk
+            disk:
+              bus: virtio
+        resources:
+          requests:
+            memory: 2Gi
+            cpu: "2"
+      volumes:
+      - name: datavolumedisk
+        dataVolume:
+          name: test-vm-005-disk
+---
+apiVersion: kubevirt.io/v1
+kind: VirtualMachine
+metadata:
+  name: test-vm-006
+  namespace: default
+  labels:
+    app: migration-test
+    tier: database
+spec:
+  running: false
+  dataVolumeTemplates:
+  - metadata:
+      name: test-vm-006-disk
+    spec:
+      source:
+        registry:
+          url: "docker://quay.io/containerdisks/fedora:40"
+      storage:
+        storageClassName: standard
+        accessModes: [ReadWriteOnce]
+        resources:
+          requests:
+            storage: 8Gi
+  template:
+    spec:
+      domain:
+        devices:
+          disks:
+          - name: datavolumedisk
+            disk:
+              bus: virtio
+        resources:
+          requests:
+            memory: 2Gi
+            cpu: "2"
+      volumes:
+      - name: datavolumedisk
+        dataVolume:
+          name: test-vm-006-disk
+---
+apiVersion: kubevirt.io/v1
+kind: VirtualMachine
+metadata:
+  name: test-vm-007
+  namespace: default
+  labels:
+    app: migration-test
+    tier: cache
+spec:
+  running: false
+  dataVolumeTemplates:
+  - metadata:
+      name: test-vm-007-disk
+    spec:
+      source:
+        registry:
+          url: "docker://quay.io/containerdisks/fedora:40"
+      storage:
+        storageClassName: standard
+        accessModes: [ReadWriteOnce]
+        resources:
+          requests:
+            storage: 5Gi
+  template:
+    spec:
+      domain:
+        devices:
+          disks:
+          - name: datavolumedisk
+            disk:
+              bus: virtio
+        resources:
+          requests:
+            memory: 1Gi
+            cpu: "1"
+      volumes:
+      - name: datavolumedisk
+        dataVolume:
+          name: test-vm-007-disk
+---
+apiVersion: kubevirt.io/v1
+kind: VirtualMachine
+metadata:
+  name: test-vm-008
+  namespace: default
+  labels:
+    app: migration-test
+    tier: cache
+spec:
+  running: false
+  dataVolumeTemplates:
+  - metadata:
+      name: test-vm-008-disk
+    spec:
+      source:
+        registry:
+          url: "docker://quay.io/containerdisks/fedora:40"
+      storage:
+        storageClassName: standard
+        accessModes: [ReadWriteOnce]
+        resources:
+          requests:
+            storage: 5Gi
+  template:
+    spec:
+      domain:
+        devices:
+          disks:
+          - name: datavolumedisk
+            disk:
+              bus: virtio
+        resources:
+          requests:
+            memory: 1Gi
+            cpu: "1"
+      volumes:
+      - name: datavolumedisk
+        dataVolume:
+          name: test-vm-008-disk
+---
+apiVersion: kubevirt.io/v1
+kind: VirtualMachine
+metadata:
+  name: test-vm-009
+  namespace: default
+  labels:
+    app: migration-test
+    tier: monitoring
+spec:
+  running: false
+  dataVolumeTemplates:
+  - metadata:
+      name: test-vm-009-disk
+    spec:
+      source:
+        registry:
+          url: "docker://quay.io/containerdisks/fedora:40"
+      storage:
+        storageClassName: standard
+        accessModes: [ReadWriteOnce]
+        resources:
+          requests:
+            storage: 6Gi
+  template:
+    spec:
+      domain:
+        devices:
+          disks:
+          - name: datavolumedisk
+            disk:
+              bus: virtio
+        resources:
+          requests:
+            memory: 1536Mi
+            cpu: "1"
+      volumes:
+      - name: datavolumedisk
+        dataVolume:
+          name: test-vm-009-disk
+---
+apiVersion: kubevirt.io/v1
+kind: VirtualMachine
+metadata:
+  name: test-vm-010
+  namespace: default
+  labels:
+    app: migration-test
+    tier: monitoring
+spec:
+  running: false
+  dataVolumeTemplates:
+  - metadata:
+      name: test-vm-010-disk
+    spec:
+      source:
+        registry:
+          url: "docker://quay.io/containerdisks/fedora:40"
+      storage:
+        storageClassName: standard
+        accessModes: [ReadWriteOnce]
+        resources:
+          requests:
+            storage: 6Gi
+  template:
+    spec:
+      domain:
+        devices:
+          disks:
+          - name: datavolumedisk
+            disk:
+              bus: virtio
+        resources:
+          requests:
+            memory: 1536Mi
+            cpu: "1"
+      volumes:
+      - name: datavolumedisk
+        dataVolume:
+          name: test-vm-010-disk
