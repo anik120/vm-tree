@@ -2,6 +2,10 @@
 
 Demonstrates migrating 10 VMs from `standard` to `standard-fast` storage class.
 
+## Requirements 
+- Cluster should have kubevirt installed. To setup kubevirt locally in a kind cluster, 
+see [this doc](../docs/setting-up-kind.md)
+
 ## Step 1: Create 10 Test VMs
 
 ```bash
