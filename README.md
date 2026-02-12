@@ -419,7 +419,97 @@ After migration completes:
 ================================================================================
 ```
 
-After migration, use `./vm-tree.py --find-orphans` to identify old resources for cleanup.
+**Finding and Cleaning Up Orphaned Resources:**
+
+After migration completes, the old DataVolumes still exist but are no longer actively used by VMs. Use `--find-orphans` to identify them:
+
+```bash
+./vm-tree.py --find-orphans
+```
+
+The tool detects orphaned resources by checking if DataVolumes have ownerReferences but are **not actively referenced in VM specs**. It then programmatically correlates them back to their original VMs using Kubernetes metadata relationships.
+
+**Example Output:**
+
+```
+================================================================================
+  Orphaned Storage Resources
+  Namespace: default
+================================================================================
+
+Found 10 orphaned resource(s):
+
+❌ Orphaned DataVolumes: 10
+(Not owned by any VirtualMachine)
+
+  • DataVolume: test-vm-001-disk
+    ├─ Namespace: default
+    ├─ Size: 3Gi
+    ├─ StorageClass: standard
+    ├─ Phase: WaitForFirstConsumer
+    ├─ Belongs to VM: test-vm-001 (✓✓ very-high confidence)
+    │  ├─ Reason: Migration source for: test-vm-001-disk-migrated-1770826216
+    │  ├─ VM Status: Provisioning
+    │  ├─ Replaced by: test-vm-001-disk-migrated-1770826216
+    │  └─ VM's current DVs: test-vm-001-disk-migrated-1770826216
+    │
+    │  💡 Hint: This is an old disk from a storage migration.
+    │      • The VM is now using the migrated disk(s)
+    │      • If VM is working correctly, this can be safely deleted
+    │      • If kept as backup, consider adding a 'backup' label for tracking
+    └─ Created: 2026-02-11T16:09:53Z
+
+  • DataVolume: test-vm-002-disk
+    ├─ Namespace: default
+    ├─ Size: 3Gi
+    ├─ StorageClass: standard
+    ├─ Phase: WaitForFirstConsumer
+    ├─ Belongs to VM: test-vm-002 (✓✓ very-high confidence)
+    │  ├─ Reason: Migration source for: test-vm-002-disk-migrated-1770826217
+    │  ├─ VM Status: Provisioning
+    │  ├─ Replaced by: test-vm-002-disk-migrated-1770826217
+    │  └─ VM's current DVs: test-vm-002-disk-migrated-1770826217
+    │
+    │  💡 Hint: This is an old disk from a storage migration.
+    │      • The VM is now using the migrated disk(s)
+    │      • If VM is working correctly, this can be safely deleted
+    │      • If kept as backup, consider adding a 'backup' label for tracking
+    └─ Created: 2026-02-11T16:09:53Z
+
+[... output truncated for remaining 8 VMs ...]
+
+================================================================================
+Cleanup Recommendations:
+
+✓ 10 orphaned DV(s) from storage migrations
+  → These were replaced by new DataVolumes on different storage classes
+  → Verify VMs are working with new disks, then delete old ones
+
+⚠️  All orphaned resources are consuming storage but not actively used
+⚠️  Consider cleaning up to reclaim storage space
+================================================================================
+```
+
+**How It Works:**
+
+The orphan detection uses a programmatic approach (no name pattern guessing):
+
+1. **Build Active DV Set**: Extracts DataVolumes actually referenced in each VM's `spec.dataVolumeTemplates` and `spec.template.spec.volumes`
+2. **Detect Orphans**: Finds DataVolumes with ownerReferences but not in the active set (leftover from migration or manual changes)
+3. **Trace Migration**: Checks if orphaned DV appears in any active DV's `spec.source.pvc.name` field
+4. **Correlate**: Uses ownerReferences and source chains to identify which VM the orphaned disk belongs to
+
+**Confidence Levels:**
+
+- **✓✓ very-high**: Migration source detected (DV has `spec.source.pvc` pointing to it) + ownerReference matches
+- **✓ high**: Has ownerReference to VM but not in VM spec (manual leftover)
+- **~ medium**: Partial correlation (less common)
+
+**Use Cases:**
+
+1. **Accidental Leftover (Use Case 1)**: Admin migrates storage but forgets to clean up old disks. They stay in the cluster consuming storage on the SAN. The tool identifies these with "very-high confidence" and suggests safe deletion.
+
+2. **Intentional Backup (Use Case 2)**: Admin wants to keep old disk as safety copy during migration (e.g., migrating from old array to new array). The tool identifies the relationship and suggests adding a `backup` label for tracking.
 
 ---
 
