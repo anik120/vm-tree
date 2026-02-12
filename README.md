@@ -57,13 +57,13 @@ A tool that visualizes the storage resource hierarchy for OpenShift Virtualizati
 
 ```bash
 # Show storage tree for a specific VM
-./vm-tree.py fedora-vm-with-storage --namespace default
+./vm-tree.py <vm-name> --namespace <namespace-name>
 
 # Show all VMs using a storage class (useful for migration planning)
-./vm-tree.py --storage-class standard
+./vm-tree.py --storage-class <storage-class-name>
 
-# Find orphaned storage resources in default namespace
-./vm-tree.py --find-orphans
+# Find orphaned storage resources in a namespace
+./vm-tree.py --find-orphans --namespace <namespace-name>
 
 # Find orphaned resources across all namespaces
 ./vm-tree.py --find-orphans --all-namespaces
@@ -72,6 +72,7 @@ A tool that visualizes the storage resource hierarchy for OpenShift Virtualizati
 **Example Output - VM Storage Tree:**
 
 ```
+$ ./vm-tree.py fedora-vm-with-storage --namespace default
 ================================================================================
   VM Storage Tree: fedora-vm-with-storage (namespace: default)
 ================================================================================
@@ -96,6 +97,7 @@ VirtualMachine: fedora-vm-with-storage
 **Example Output - Orphaned Resources:**
 
 ```
+$ ./vm-tree.py --find-orphans --namespace default
 ================================================================================
   Orphaned Storage Resources
   Namespace: default
@@ -145,16 +147,16 @@ A tool that automates the migration of VMs from one storage class to another, ma
 
 ```bash
 # Plan migration (shows what will be migrated)
-./storage-migration.py plan --from-sc standard --to-sc standard-fast -n default
+./storage-migration.py plan --from-sc <storage-class-name> --to-sc <storage-class-name> -n <namespace-name>
 
 # Execute migration with dry-run first
-./storage-migration.py execute --from-sc standard --to-sc standard-fast -n default --dry-run
+./storage-migration.py execute --from-sc <storage-class-name> --to-sc <storage-class-name> -n <namespace-name> --dry-run
 
 # Execute actual migration
-./storage-migration.py execute --from-sc standard --to-sc standard-fast -n default
+./storage-migration.py execute --from-sc <stroage-class-name> --to-sc <stroage-class-name> -n default
 
 # Plan migration across all namespaces
-./storage-migration.py plan --from-sc gp2-csi --to-sc gp3-csi
+./storage-migration.py plan --from-sc <storage-class-name> --to-sc <storage-class-name>
 ```
 
 **Example Output - Plan Mode:**
@@ -358,53 +360,7 @@ Migrating 10 VM(s)...
   Updating VM spec to use new DataVolumes...
   ✅ VM patched: test-vm-002-disk → test-vm-002-disk-migrated-1770826217
 
-[3/10] Migrating VM: test-vm-003
-  Creating new DataVolume: test-vm-003-disk-migrated-1770826218
-  ✅ DataVolume created
-  Updating VM spec to use new DataVolumes...
-  ✅ VM patched: test-vm-003-disk → test-vm-003-disk-migrated-1770826218
-
-[4/10] Migrating VM: test-vm-004
-  Creating new DataVolume: test-vm-004-disk-migrated-1770826218
-  ✅ DataVolume created
-  Updating VM spec to use new DataVolumes...
-  ✅ VM patched: test-vm-004-disk → test-vm-004-disk-migrated-1770826218
-
-[5/10] Migrating VM: test-vm-005
-  Creating new DataVolume: test-vm-005-disk-migrated-1770826219
-  ✅ DataVolume created
-  Updating VM spec to use new DataVolumes...
-  ✅ VM patched: test-vm-005-disk → test-vm-005-disk-migrated-1770826219
-
-[6/10] Migrating VM: test-vm-006
-  Creating new DataVolume: test-vm-006-disk-migrated-1770826220
-  ✅ DataVolume created
-  Updating VM spec to use new DataVolumes...
-  ✅ VM patched: test-vm-006-disk → test-vm-006-disk-migrated-1770826220
-
-[7/10] Migrating VM: test-vm-007
-  Creating new DataVolume: test-vm-007-disk-migrated-1770826221
-  ✅ DataVolume created
-  Updating VM spec to use new DataVolumes...
-  ✅ VM patched: test-vm-007-disk → test-vm-007-disk-migrated-1770826221
-
-[8/10] Migrating VM: test-vm-008
-  Creating new DataVolume: test-vm-008-disk-migrated-1770826222
-  ✅ DataVolume created
-  Updating VM spec to use new DataVolumes...
-  ✅ VM patched: test-vm-008-disk → test-vm-008-disk-migrated-1770826222
-
-[9/10] Migrating VM: test-vm-009
-  Creating new DataVolume: test-vm-009-disk-migrated-1770826223
-  ✅ DataVolume created
-  Updating VM spec to use new DataVolumes...
-  ✅ VM patched: test-vm-009-disk → test-vm-009-disk-migrated-1770826223
-
-[10/10] Migrating VM: test-vm-010
-  Creating new DataVolume: test-vm-010-disk-migrated-1770826224
-  ✅ DataVolume created
-  Updating VM spec to use new DataVolumes...
-  ✅ VM patched: test-vm-010-disk → test-vm-010-disk-migrated-1770826224
+[... output truncated for remaining 8 VMs ...]
 
 ================================================================================
 MIGRATION INITIATED
